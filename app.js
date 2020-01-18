@@ -42,9 +42,10 @@ app.use(passport.initialize());
 app.use(passport.session());
 
 mongoose.connect("mongodb://localhost:27017/userDB",{useNewUrlParser:true, 
-useUnifiedTopology: true, 
-useCreateIndex: true, 
-useFindAndModify: false });
+// useUnifiedTopology: true, 
+// useCreateIndex: true, 
+// useFindAndModify: false 
+});
 
 //session- STEP7
 //에러 떠서 해결해줌
@@ -55,7 +56,8 @@ mongoose.set("useCreateIndex", true);
 const userSchema = new mongoose.Schema({
     email: String,
     password: String,
-    googleId:String
+    googleId:String,
+    secret:String
 });
 
 //session- STEP5
@@ -119,13 +121,56 @@ app.get("/login",function(req,res){
 
 //session- STEP9
 app.get("/secrets",function(req,res){
+    
+    // if(req.isAuthenticated()){
+    //     res.render("secrets");
+    // }else{
+    //     res.redirect("/login");
+    // }
+
+    User.find({"secret":{$ne: null}},function(err,foundUsers){
+        if(err){
+            console.log(err);
+            
+        }else{
+            if(foundUsers){
+                res.render("secrets",{usersWithSecrets:foundUsers});
+            }
+        }
+    });
+});
+
+app.get("/register",function(req,res){
+    res.render("register");
+});
+
+
+
+app.get("/submit",function(req,res){
     if(req.isAuthenticated()){
-        res.render("secrets");
+        res.render("submit");
     }else{
         res.redirect("/login");
     }
 });
 
+app.post("/submit",function(req,res){
+    const submittedSecret=req.body.secret;
+    User.findById(req.user.id,function(err,foundUser){
+        if(err){
+            console.log(err);
+            
+        }else{
+            if(foundUser){
+                foundUser.secret=submittedSecret;
+                foundUser.save(function(){
+                    res.redirect("/secrets");
+                });
+            }
+            
+        }
+    });
+});
 
 //session- STEP11
 app.get("/logout",function(req,res){
@@ -137,9 +182,7 @@ app.get("/logout",function(req,res){
 
 
 
-app.get("/register",function(req,res){
-    res.render("register");
-});
+
 
 //session- STEP8
 app.post("/register",function(req,res){
