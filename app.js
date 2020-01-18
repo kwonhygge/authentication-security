@@ -12,7 +12,8 @@ const mongoose = require("mongoose");
 const session = require('express-session');
 const passport = require("passport");
 const passportLocalMongoose = require("passport-local-mongoose");
-
+const GoogleStrategy = require('passport-google-oauth20').Strategy;
+const findOrCreate = require("mongoose-findorcreate");
 
 const app = express();
 
@@ -53,11 +54,13 @@ mongoose.set("useCreateIndex", true);
 //mongoose schema 써서 필요한 세팅을 미리 해줌
 const userSchema = new mongoose.Schema({
     email: String,
-    password: String
+    password: String,
+    googleId:String
 });
 
 //session- STEP5
 userSchema.plugin(passportLocalMongoose);
+userSchema.plugin(findOrCreate);
 
 //gitignore 만들때, .env랑 node_modules도 ignore 해주어야 함
 // userSchema.plugin(encrypt,{secret:process.env.SECRET , encryptedFields: ["password"]});
@@ -68,13 +71,47 @@ const User = new mongoose.model("User",userSchema);
 //deserialise는 쿠키를 열람하는 것
 passport.use(User.createStrategy());
 
-passport.serializeUser(User.serializeUser());
-passport.deserializeUser(User.deserializeUser());
+// passport.serializeUser(User.serializeUser());
+// passport.deserializeUser(User.deserializeUser());
+passport.serializeUser(function(user, done) {
+    done(null, user.id);
+  });
+  
+passport.deserializeUser(function(id, done) {
+    User.findById(id, function(err, user) {
+      done(err, user);
+    });
+});
+
+
+passport.use(new GoogleStrategy({
+    clientID: process.env.CLIENT_ID,
+    clientSecret: process.env.CLIENT_SECRET,
+    callbackURL: "http://localhost:3000/auth/google/secrets",
+    userProfileURL: "https://www.googleapis.com/oauth2/v3/userinfo"
+  },
+  function(accessToken, refreshToken, profile, cb) {
+    User.findOrCreate({ googleId: profile.id }, function (err, user) {
+      return cb(err, user);
+    });
+  }
+));
 
 
 app.get("/",function(req,res){
     res.render("home");
 });
+
+app.get("/auth/google",
+    passport.authenticate('google',{scope:["profile"]})
+);
+
+app.get('/auth/google/secrets', 
+  passport.authenticate('google', { failureRedirect: '/login' }),
+  function(req, res) {
+    // Successful authentication, redirect home.
+    res.redirect('/secrets');
+  });
 
 app.get("/login",function(req,res){
     res.render("login");
@@ -89,8 +126,10 @@ app.get("/secrets",function(req,res){
     }
 });
 
+
 //session- STEP11
 app.get("/logout",function(req,res){
+    //return 받은 user를 로그아웃 시켜줌 
     req.logout();
     res.redirect("/");
 });
